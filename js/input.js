@@ -119,10 +119,8 @@ class InputManager {
   _bindPointerEvents() {
     this.canvas.addEventListener('pointerdown', (e) => {
       this.activePointer = this._getCanvasPointerPos(e);
-      try {
-        this.canvas.setPointerCapture(e.pointerId);
-      } catch (err) {
-        // Ignore if pointer capture fails
+      if (typeof this.callbacks.onCanvasPointerDown === 'function') {
+        this.callbacks.onCanvasPointerDown(this.activePointer);
       }
     });
 
@@ -138,6 +136,7 @@ class InputManager {
 
     this.canvas.addEventListener('pointerup', clearPointer);
     this.canvas.addEventListener('pointercancel', clearPointer);
+    this.canvas.addEventListener('pointerleave', clearPointer);
   }
 
   /**

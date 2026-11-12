@@ -39,7 +39,7 @@ const CONFIG = Object.freeze({
   }),
 
   FLOCK: Object.freeze({
-    COUNT: 5,
+    COUNT: 10,
     LEAD_SPEED: 140,
     LEAD_CALL_SPEED: 95,
     LEAD_ACCELERATION: 8,

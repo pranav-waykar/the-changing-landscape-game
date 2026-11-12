@@ -25,8 +25,10 @@ class Game {
    * @param {HTMLElement} overlayElement
    * @param {HTMLElement} callButton
    * @param {HTMLElement} presentationBarElement
+   * @param {HTMLElement} [audioButtonElement]
+   * @param {HTMLElement} [pauseButtonElement]
    */
-  constructor(canvas, overlayElement, callButton, presentationBarElement) {
+  constructor(canvas, overlayElement, callButton, presentationBarElement, audioButtonElement, pauseButtonElement) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
 
@@ -61,17 +63,17 @@ class Game {
     this.traffic = new TrafficManager();
 
     // UI & Input Managers
-    this._initUI(overlayElement, presentationBarElement);
+    this._initUI(overlayElement, presentationBarElement, audioButtonElement, pauseButtonElement);
     this._initInput(callButton);
 
     // Initial setup
     this.flock.reset(CONFIG.WORLD.START_POSITION);
     this.ui.showIntroCard();
-    this.ui.syncPresentationBar(this.getCurrentStageNumber(), this.isAutoMode, this.isPaused);
+    this.ui.syncPresentationBar(this.getCurrentStageNumber(), this.isAutoMode, this.isPaused, this.sound.isMuted);
 
     // Sync presentation toolbar periodically
     this.syncIntervalId = setInterval(() => {
-      this.ui.syncPresentationBar(this.getCurrentStageNumber(), this.isAutoMode, this.isPaused);
+      this.ui.syncPresentationBar(this.getCurrentStageNumber(), this.isAutoMode, this.isPaused, this.sound.isMuted);
     }, 300);
   }
 
@@ -79,8 +81,8 @@ class Game {
    * Initializes the UI Manager and registers action delegates.
    * @private
    */
-  _initUI(overlayElement, presentationBarElement) {
-    this.ui = new UIManager(overlayElement, presentationBarElement, {
+  _initUI(overlayElement, presentationBarElement, audioButtonElement, pauseButtonElement) {
+    this.ui = new UIManager(overlayElement, presentationBarElement, audioButtonElement, pauseButtonElement, {
       begin: () => this.startNewGame(),
       retry: () => this.retryAfterHit(),
       again: () => this.resetEntireGame(),
@@ -88,7 +90,8 @@ class Game {
       onNextStage: () => this.jumpToStage(this.getCurrentStageNumber() + 1),
       onJumpStage: (stageNum) => this.jumpToStage(stageNum),
       onToggleAuto: () => this.toggleAutoMode(),
-      onTogglePause: () => this.togglePause()
+      onTogglePause: () => this.togglePause(),
+      onToggleAudio: () => this.toggleAudio()
     });
   }
 
@@ -110,7 +113,13 @@ class Game {
       onPrevStage: () => this.jumpToStage(this.getCurrentStageNumber() - 1),
       onToggleAuto: () => this.toggleAutoMode(),
       onToggleToolbar: () => this.ui.toggleToolbarVisibility(),
-      onTogglePause: () => this.togglePause()
+      onTogglePause: () => this.togglePause(),
+      onCanvasPointerDown: () => {
+        // Clicking on the canvas while paused immediately resumes
+        if (this.isPaused) {
+          this.togglePause();
+        }
+      }
     });
   }
 
@@ -127,10 +136,19 @@ class Game {
    * Toggles pause state for live audience deliberation.
    */
   togglePause() {
-    if (this.state !== GameState.PLAYING) return;
+    // Only block pause during intro/game over cards
+    if (this.state === GameState.INTRO || this.state === GameState.GAME_OVER) return;
     this.isPaused = !this.isPaused;
     this.sound.resumeContext();
-    this.ui.syncPresentationBar(this.getCurrentStageNumber(), this.isAutoMode, this.isPaused);
+    this.ui.syncPresentationBar(this.getCurrentStageNumber(), this.isAutoMode, this.isPaused, this.sound.isMuted);
+  }
+
+  /**
+   * Toggles master audio on/off.
+   */
+  toggleAudio() {
+    const isMuted = this.sound.toggleMute();
+    this.ui.syncPresentationBar(this.getCurrentStageNumber(), this.isAutoMode, this.isPaused, isMuted);
   }
 
   /**
@@ -199,7 +217,7 @@ class Game {
     const clampedStage = MathUtils.clamp(stageNumber, 1, CONFIG.STAGES.MAX_STAGE);
     this.isAutoMode = false;
     this.targetDevelopmentLevel = CONFIG.STAGES.TARGET_LEVELS[clampedStage - 1];
-    this.ui.syncPresentationBar(this.getCurrentStageNumber(), this.isAutoMode);
+    this.ui.syncPresentationBar(this.getCurrentStageNumber(), this.isAutoMode, this.isPaused, this.sound.isMuted);
   }
 
   /**
@@ -210,7 +228,7 @@ class Game {
     if (!this.isAutoMode) {
       this.targetDevelopmentLevel = this.developmentLevel;
     }
-    this.ui.syncPresentationBar(this.getCurrentStageNumber(), this.isAutoMode);
+    this.ui.syncPresentationBar(this.getCurrentStageNumber(), this.isAutoMode, this.isPaused, this.sound.isMuted);
   }
 
   /**
@@ -289,11 +307,15 @@ class Game {
     const isArrived = this.state === GameState.ARRIVED;
     const isPlayState = this.state === GameState.PLAYING;
 
-    // Audio: Shepherd whistle when calling
+    // Audio: Shepherd call whistle
     if (isCalling) {
       this.sound.playShepherdWhistle();
-    } else if (Math.random() < 0.005) {
-      this.sound.playSheepBell();
+    }
+
+    // Audio: Soft rhythmic sheep neck bells as flock walks
+    const leaderSpeed = Math.hypot(leaderPos.vx, leaderPos.vy);
+    if (leaderSpeed > 10) {
+      this.sound.playSoftSheepBell();
     }
 
     this.flock.update(
@@ -311,20 +333,17 @@ class Game {
     // Update Traffic
     this.traffic.update(dt, this.developmentLevel);
 
-    // Audio & Horns: Detect vehicles passing screen center and proximity to sheep
+    // Audio: Dynamic vehicle honking when approaching sheep near or on the highway
     if (this.traffic.vehicles.length > 0) {
       for (const vehicle of this.traffic.vehicles) {
-        // Spatial passing whoosh when vehicle crosses center quadrant
-        if (Math.abs(vehicle.x - CONFIG.CANVAS.WIDTH / 2) < 25) {
-          this.sound.playVehicleWhoosh(vehicle);
-        }
-
-        // Vehicle horn if within 50px of any sheep
         for (const sheep of this.flock.members) {
-          const dX = Math.abs(sheep.x - vehicle.x);
-          const dY = Math.abs(sheep.y - vehicle.y);
-          if (dX < 55 && dY < 35) {
-            this.sound.playVehicleHorn();
+          const aheadDist = (sheep.x - vehicle.x) * vehicle.direction;
+          const verticalDist = Math.abs(sheep.y - vehicle.y);
+
+          // Honk if sheep is ahead in vehicle's trajectory and near the road corridor
+          if (aheadDist > 15 && aheadDist < 100 && verticalDist < 42) {
+            this.sound.playVehicleHorn(trafficIntensity, vehicle.type);
+            break;
           }
         }
       }
@@ -334,7 +353,7 @@ class Game {
     if (this.state === GameState.PLAYING && this.developmentLevel >= CONFIG.TRAFFIC.MIN_DEVELOPMENT_LEVEL) {
       const collision = this.flock.checkVehicleCollisions(this.traffic.vehicles);
       if (collision.hit) {
-        this.sound.playCollisionThud();
+        this.sound.playHitImpact();
         this.state = GameState.SHEEP_HIT;
         this.hitTimer = 0.0;
         this.totalHits++;

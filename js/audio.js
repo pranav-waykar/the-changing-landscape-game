@@ -1,9 +1,11 @@
 /**
- * The Changing Landscape - Procedural Sound Manager
+ * The Changing Landscape - Sound Manager
  * 
- * Synthesizes an evolving, zero-dependency soundscape via the Web Audio API.
- * Transitions from the open pastoral acoustic space of the grassland (wind, bells, shepherd calls)
- * to the aggressive mechanical soundscape of the highway (asphalt drone, vehicle Doppler whooshes, horns).
+ * Provides clean, organic Web Audio soundscapes:
+ * 1. Gentle grassland wind with subtle natural swell.
+ * 2. Clear shepherd call whistle on movement/call.
+ * 3. Occasional passing vehicle horn when vehicles pass near sheep.
+ * Fully supports instantaneous on/off toggling.
  */
 
 'use strict';
@@ -16,19 +18,18 @@ class SoundManager {
 
     // Audio graph nodes
     this.masterGain = null;
+    this.pauseFilter = null;
     this.windGain = null;
     this.windFilter = null;
-    this.roadGain = null;
-    this.roadFilter = null;
 
-    // Timers & throttle state
+    // Rate-limiting timers
     this.lastWhistleTime = 0;
-    this.lastBellTime = 0;
     this.lastHornTime = 0;
+    this.lastBellTime = 0;
   }
 
   /**
-   * Initializes the AudioContext upon the first user gesture.
+   * Initializes the Web Audio context upon the first user interaction.
    */
   init() {
     if (this.isInitialized) return;
@@ -40,7 +41,6 @@ class SoundManager {
       this.ctx = new AudioCtx();
       this._buildMasterBus();
       this._buildWindSynthesizer();
-      this._buildRoadRumbleSynthesizer();
       this.isInitialized = true;
     } catch (err) {
       console.warn('Web Audio API not supported or blocked:', err);
@@ -60,12 +60,12 @@ class SoundManager {
   }
 
   /**
-   * Builds the master gain bus and ducking filter for pause states.
+   * Sets up master volume bus and warm filter for deliberation pause.
    * @private
    */
   _buildMasterBus() {
     this.masterGain = this.ctx.createGain();
-    this.masterGain.gain.setValueAtTime(0.7, this.ctx.currentTime);
+    this.masterGain.gain.setValueAtTime(this.isMuted ? 0.0 : 0.65, this.ctx.currentTime);
 
     this.pauseFilter = this.ctx.createBiquadFilter();
     this.pauseFilter.type = 'lowpass';
@@ -76,46 +76,46 @@ class SoundManager {
   }
 
   /**
-   * Builds a procedural wind generator using filtered noise and an LFO.
+   * Builds an organic wind synthesizer using filtered noise and a soft swell LFO.
    * @private
    */
   _buildWindSynthesizer() {
-    // Generate 2 seconds of pink/white noise buffer
     const bufferSize = this.ctx.sampleRate * 2;
     const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
     const output = noiseBuffer.getChannelData(0);
 
+    // Filtered pink noise algorithm for gentle natural air texture
     let b0 = 0, b1 = 0, b2 = 0;
     for (let i = 0; i < bufferSize; i++) {
       const white = Math.random() * 2 - 1;
-      b0 = 0.99886 * b0 + white * 0.0555179;
-      b1 = 0.99332 * b1 + white * 0.0750759;
-      b2 = 0.96900 * b2 + white * 0.1538520;
-      output[i] = (b0 + b1 + b2) * 0.15;
+      b0 = 0.99886 * b0 + white * 0.045;
+      b1 = 0.99332 * b1 + white * 0.065;
+      b2 = 0.96900 * b2 + white * 0.120;
+      output[i] = (b0 + b1 + b2) * 0.12;
     }
 
     const noiseSource = this.ctx.createBufferSource();
     noiseSource.buffer = noiseBuffer;
     noiseSource.loop = true;
 
-    // Resonant bandpass filter to give wind resonance
+    // Warm, gentle bandpass filter
     this.windFilter = this.ctx.createBiquadFilter();
     this.windFilter.type = 'bandpass';
-    this.windFilter.frequency.setValueAtTime(380, this.ctx.currentTime);
-    this.windFilter.Q.setValueAtTime(1.8, this.ctx.currentTime);
+    this.windFilter.frequency.setValueAtTime(320, this.ctx.currentTime);
+    this.windFilter.Q.setValueAtTime(1.2, this.ctx.currentTime);
 
-    // LFO to simulate wind gusts
+    // Soft LFO swell every ~5 seconds
     const lfo = this.ctx.createOscillator();
     lfo.type = 'sine';
-    lfo.frequency.setValueAtTime(0.22, this.ctx.currentTime); // Gentle swell every ~4.5 seconds
+    lfo.frequency.setValueAtTime(0.18, this.ctx.currentTime);
 
     const lfoGain = this.ctx.createGain();
-    lfoGain.gain.setValueAtTime(140, this.ctx.currentTime);
+    lfoGain.gain.setValueAtTime(90, this.ctx.currentTime);
     lfo.connect(lfoGain);
     lfoGain.connect(this.windFilter.frequency);
 
     this.windGain = this.ctx.createGain();
-    this.windGain.gain.setValueAtTime(0.35, this.ctx.currentTime);
+    this.windGain.gain.setValueAtTime(0.28, this.ctx.currentTime);
 
     noiseSource.connect(this.windFilter);
     this.windFilter.connect(this.windGain);
@@ -126,38 +126,8 @@ class SoundManager {
   }
 
   /**
-   * Builds the low-frequency asphalt and tire friction rumble.
-   * @private
-   */
-  _buildRoadRumbleSynthesizer() {
-    const bufferSize = this.ctx.sampleRate * 2;
-    const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-    const output = noiseBuffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) {
-      output[i] = (Math.random() * 2 - 1) * 0.2;
-    }
-
-    const roadNoise = this.ctx.createBufferSource();
-    roadNoise.buffer = noiseBuffer;
-    roadNoise.loop = true;
-
-    this.roadFilter = this.ctx.createBiquadFilter();
-    this.roadFilter.type = 'lowpass';
-    this.roadFilter.frequency.setValueAtTime(90, this.ctx.currentTime);
-
-    this.roadGain = this.ctx.createGain();
-    this.roadGain.gain.setValueAtTime(0.0, this.ctx.currentTime); // Silent at start
-
-    roadNoise.connect(this.roadFilter);
-    this.roadFilter.connect(this.roadGain);
-    this.roadGain.connect(this.masterGain);
-
-    roadNoise.start();
-  }
-
-  /**
-   * Updates ambient soundscape volumes and filter frequencies based on development level.
-   * @param {number} developmentLevel [0.0 to 6.0]
+   * Updates wind dynamics based on development level and pause state.
+   * @param {number} developmentLevel
    * @param {boolean} isPaused
    */
   update(developmentLevel, isPaused) {
@@ -165,54 +135,53 @@ class SoundManager {
 
     const now = this.ctx.currentTime;
 
-    // Handle pause ducking: reduce volume and muffle high frequencies during deliberation
+    if (this.isMuted) {
+      this.masterGain.gain.setTargetAtTime(0.0, now, 0.05);
+      return;
+    }
+
+    // Deliberation pause: muffle audio slightly so speech remains completely clear
     if (isPaused) {
-      this.pauseFilter.frequency.setTargetAtTime(600, now, 0.1);
-      this.masterGain.gain.setTargetAtTime(0.25, now, 0.1);
+      this.pauseFilter.frequency.setTargetAtTime(700, now, 0.1);
+      this.masterGain.gain.setTargetAtTime(0.2, now, 0.1);
       return;
     } else {
       this.pauseFilter.frequency.setTargetAtTime(20000, now, 0.1);
-      this.masterGain.gain.setTargetAtTime(this.isMuted ? 0.0 : 0.7, now, 0.1);
+      this.masterGain.gain.setTargetAtTime(0.65, now, 0.1);
     }
 
+    // Wind softly transitions across stages
     const devRatio = MathUtils.clamp(developmentLevel / 6.0, 0, 1);
-
-    // Wind gradually diminishes as highway infrastructure takes over
-    const windTargetVolume = Math.max(0.04, 0.35 * (1 - devRatio * 0.8));
-    this.windGain.gain.setTargetAtTime(windTargetVolume, now, 0.2);
-
-    // Road rumble ramps up starting at stage 2 (devLevel >= 1.0)
-    if (developmentLevel >= 1.0) {
-      const roadIntensity = MathUtils.clamp((developmentLevel - 1.0) / 4.0, 0, 1);
-      const rumbleVolume = 0.45 * Math.pow(roadIntensity, 1.2);
-      this.roadGain.gain.setTargetAtTime(rumbleVolume, now, 0.2);
-      this.roadFilter.frequency.setTargetAtTime(90 + roadIntensity * 130, now, 0.2);
-    } else {
-      this.roadGain.gain.setTargetAtTime(0.0, now, 0.2);
-    }
+    const windTargetVolume = Math.max(0.08, 0.28 * (1 - devRatio * 0.5));
+    this.windGain.gain.setTargetAtTime(windTargetVolume, now, 0.3);
   }
 
   /**
-   * Plays a delicate metallic sheep bell chime.
+   * Plays a delicate, soft brass bell chime providing organic auditory feedback when sheep walk.
    */
-  playSheepBell() {
+  playSoftSheepBell() {
     if (!this.ctx || !this.isInitialized || this.isMuted) return;
 
     const now = this.ctx.currentTime;
-    if (now - this.lastBellTime < 1.5) return; // Rate limit bells
+    if (now - this.lastBellTime < 0.28) return; // Natural walking cadence
     this.lastBellTime = now;
 
     const osc1 = this.ctx.createOscillator();
     const osc2 = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
 
+    // Natural brass bell harmonic pair with subtle pitch variation
+    const baseFreq = 1480 + (Math.random() - 0.5) * 160;
     osc1.type = 'sine';
     osc2.type = 'sine';
-    osc1.frequency.setValueAtTime(1420 + Math.random() * 80, now);
-    osc2.frequency.setValueAtTime(2150 + Math.random() * 100, now);
+    osc1.frequency.setValueAtTime(baseFreq, now);
+    osc2.frequency.setValueAtTime(baseFreq * 1.48, now);
 
-    gain.gain.setValueAtTime(0.08, now);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.6);
+    // Very gentle volume: soft clink of small neck bells against wool
+    const vol = 0.038 + Math.random() * 0.015;
+    gain.gain.setValueAtTime(0.001, now);
+    gain.gain.linearRampToValueAtTime(vol, now + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
 
     osc1.connect(gain);
     osc2.connect(gain);
@@ -220,119 +189,99 @@ class SoundManager {
 
     osc1.start(now);
     osc2.start(now);
-    osc1.stop(now + 0.6);
-    osc2.stop(now + 0.6);
+    osc1.stop(now + 0.22);
+    osc2.stop(now + 0.22);
   }
 
   /**
-   * Plays a shepherd call whistle when commanding the flock.
+   * Plays a clean, pleasant shepherd call whistle.
    */
   playShepherdWhistle() {
     if (!this.ctx || !this.isInitialized || this.isMuted) return;
 
     const now = this.ctx.currentTime;
-    if (now - this.lastWhistleTime < 0.6) return;
+    if (now - this.lastWhistleTime < 0.9) return; // Rate limit whistles
     this.lastWhistleTime = now;
 
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
 
+    // Pure, clear sine whistle sliding gently from 980Hz to 1220Hz
     osc.type = 'sine';
-    // Gentle melodic whistle inflection: 950Hz sliding to 1180Hz
-    osc.frequency.setValueAtTime(950, now);
-    osc.frequency.exponentialRampToValueAtTime(1180, now + 0.15);
-    osc.frequency.exponentialRampToValueAtTime(980, now + 0.35);
+    osc.frequency.setValueAtTime(980, now);
+    osc.frequency.exponentialRampToValueAtTime(1220, now + 0.12);
+    osc.frequency.exponentialRampToValueAtTime(1040, now + 0.28);
 
     gain.gain.setValueAtTime(0.001, now);
-    gain.gain.linearRampToValueAtTime(0.12, now + 0.08);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.4);
+    gain.gain.linearRampToValueAtTime(0.12, now + 0.05);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.32);
 
     osc.connect(gain);
     gain.connect(this.masterGain);
 
     osc.start(now);
-    osc.stop(now + 0.4);
+    osc.stop(now + 0.32);
   }
 
   /**
-   * Synthesizes a spatial Doppler whoosh for a vehicle crossing the screen.
-   * @param {Vehicle} vehicle
+   * Plays a vehicle horn with frequency and timbre matching the vehicle type.
+   * Honking frequency scales dynamically with traffic intensity.
+   * @param {number} [trafficIntensity=0.5] [0.0 to 1.0]
+   * @param {string} [vehicleType='car'] 'bike' | 'car' | 'truck' | 'bus'
    */
-  playVehicleWhoosh(vehicle) {
+  playVehicleHorn(trafficIntensity = 0.5, vehicleType = 'car') {
     if (!this.ctx || !this.isInitialized || this.isMuted) return;
 
     const now = this.ctx.currentTime;
-
-    // Stereo panning based on X coordinate on 960px canvas (-1.0 to +1.0)
-    let panner = null;
-    if (typeof this.ctx.createStereoPanner === 'function') {
-      panner = this.ctx.createStereoPanner();
-      const panX = MathUtils.clamp((vehicle.x / CONFIG.CANVAS.WIDTH) * 2 - 1, -1, 1);
-      panner.pan.setValueAtTime(panX, now);
-    }
-
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-
-    // Base pitch by vehicle type
-    let basePitch = 120;
-    let volume = 0.08;
-    if (vehicle.type === 'truck' || vehicle.type === 'bus') {
-      basePitch = 65;
-      volume = 0.14;
-      osc.type = 'sawtooth';
-    } else if (vehicle.type === 'bike') {
-      basePitch = 210;
-      volume = 0.05;
-      osc.type = 'triangle';
-    } else {
-      basePitch = 110;
-      volume = 0.08;
-      osc.type = 'triangle';
-    }
-
-    osc.frequency.setValueAtTime(basePitch * 1.1, now);
-    osc.frequency.exponentialRampToValueAtTime(basePitch * 0.9, now + 0.3);
-
-    gain.gain.setValueAtTime(volume, now);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
-
-    if (panner) {
-      osc.connect(panner);
-      panner.connect(gain);
-    } else {
-      osc.connect(gain);
-    }
-    gain.connect(this.masterGain);
-
-    osc.start(now);
-    osc.stop(now + 0.35);
-  }
-
-  /**
-   * Plays a sharp double-tone vehicle horn when sheep are in peril near the road.
-   */
-  playVehicleHorn() {
-    if (!this.ctx || !this.isInitialized || this.isMuted) return;
-
-    const now = this.ctx.currentTime;
-    if (now - this.lastHornTime < 2.0) return; // Don't spam horns
+    // As traffic intensity increases, honking happens more frequently (from 2.8s down to 0.7s)
+    const minInterval = MathUtils.lerp(2.8, 0.7, MathUtils.clamp(trafficIntensity, 0, 1));
+    if (now - this.lastHornTime < minInterval) return;
     this.lastHornTime = now;
 
     const tone1 = this.ctx.createOscillator();
     const tone2 = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
 
-    tone1.type = 'sawtooth';
-    tone2.type = 'sawtooth';
-    tone1.frequency.setValueAtTime(370, now);
-    tone2.frequency.setValueAtTime(465, now);
+    let f1 = 420;
+    let f2 = 525;
+    let duration = 0.28;
+    let vol = 0.11;
 
-    // Two rapid horn beeps
-    gain.gain.setValueAtTime(0.12, now);
-    gain.gain.setValueAtTime(0.0, now + 0.12);
-    gain.gain.setValueAtTime(0.12, now + 0.18);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.45);
+    // Distinct realistic vehicle horn signatures
+    if (vehicleType === 'truck' || vehicleType === 'bus') {
+      tone1.type = 'triangle';
+      tone2.type = 'sine';
+      f1 = 285;
+      f2 = 356;
+      duration = 0.38;
+      vol = 0.13;
+    } else if (vehicleType === 'bike') {
+      tone1.type = 'sine';
+      tone2.type = 'sine';
+      f1 = 640;
+      f2 = 800;
+      duration = 0.20;
+      vol = 0.08;
+    } else {
+      // Car
+      tone1.type = 'triangle';
+      tone2.type = 'sine';
+      f1 = 420;
+      f2 = 525;
+      duration = 0.28;
+      vol = 0.11;
+    }
+
+    tone1.frequency.setValueAtTime(f1, now);
+    tone2.frequency.setValueAtTime(f2, now);
+
+    // Warm double-beep pattern: "peep-peep"
+    const halfDur = duration * 0.4;
+    const gap = duration * 0.15;
+    gain.gain.setValueAtTime(vol, now);
+    gain.gain.setValueAtTime(0.001, now + halfDur);
+    gain.gain.setValueAtTime(vol, now + halfDur + gap);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
 
     tone1.connect(gain);
     tone2.connect(gain);
@@ -340,42 +289,62 @@ class SoundManager {
 
     tone1.start(now);
     tone2.start(now);
-    tone1.stop(now + 0.45);
-    tone2.stop(now + 0.45);
+    tone1.stop(now + duration);
+    tone2.stop(now + duration);
   }
 
   /**
-   * Plays a heavy thud sound upon sheep collision.
+   * Plays a somber collision sound: a low acoustic impact thud followed by a single lingering bell chime that fades away.
    */
-  playCollisionThud() {
+  playHitImpact() {
     if (!this.ctx || !this.isInitialized || this.isMuted) return;
 
     const now = this.ctx.currentTime;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
 
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(160, now);
-    osc.frequency.exponentialRampToValueAtTime(30, now + 0.4);
+    // 1. Low acoustic impact thud
+    const thudOsc = this.ctx.createOscillator();
+    const thudGain = this.ctx.createGain();
 
-    gain.gain.setValueAtTime(0.3, now);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.4);
+    thudOsc.type = 'triangle';
+    thudOsc.frequency.setValueAtTime(95, now);
+    thudOsc.frequency.exponentialRampToValueAtTime(28, now + 0.32);
 
-    osc.connect(gain);
-    gain.connect(this.masterGain);
+    thudGain.gain.setValueAtTime(0.24, now);
+    thudGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
 
-    osc.start(now);
-    osc.stop(now + 0.4);
+    thudOsc.connect(thudGain);
+    thudGain.connect(this.masterGain);
+
+    thudOsc.start(now);
+    thudOsc.stop(now + 0.35);
+
+    // 2. Lingering solitary neck bell chime trailing into silence
+    const bellOsc = this.ctx.createOscillator();
+    const bellGain = this.ctx.createGain();
+
+    bellOsc.type = 'sine';
+    bellOsc.frequency.setValueAtTime(1180, now + 0.05);
+
+    bellGain.gain.setValueAtTime(0.001, now);
+    bellGain.gain.setValueAtTime(0.09, now + 0.06);
+    bellGain.gain.exponentialRampToValueAtTime(0.0001, now + 1.2);
+
+    bellOsc.connect(bellGain);
+    bellGain.connect(this.masterGain);
+
+    bellOsc.start(now + 0.05);
+    bellOsc.stop(now + 1.2);
   }
 
   /**
-   * Toggles audio mute.
-   * @returns {boolean} New mute state
+   * Toggles audio mute state.
+   * @returns {boolean} New isMuted state
    */
   toggleMute() {
+    this.resumeContext();
     this.isMuted = !this.isMuted;
     if (this.masterGain && this.ctx) {
-      this.masterGain.gain.setTargetAtTime(this.isMuted ? 0.0 : 0.7, this.ctx.currentTime, 0.05);
+      this.masterGain.gain.setTargetAtTime(this.isMuted ? 0.0 : 0.65, this.ctx.currentTime, 0.05);
     }
     return this.isMuted;
   }

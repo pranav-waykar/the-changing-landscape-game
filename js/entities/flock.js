@@ -23,8 +23,8 @@ class Flock {
     const count = CONFIG.FLOCK.COUNT;
 
     for (let i = 0; i < count; i++) {
-      const offsetX = i === 0 ? 0 : (Math.random() - 0.5) * 70;
-      const offsetY = i === 0 ? 0 : (Math.random() - 0.5) * 40;
+      const offsetX = i === 0 ? 0 : (Math.random() - 0.5) * 85;
+      const offsetY = i === 0 ? 0 : (Math.random() - 0.5) * 55;
       this.members.push(new Sheep(i, startPos.x + offsetX, startPos.y + offsetY));
     }
   }

@@ -12,15 +12,46 @@ class UIManager {
   /**
    * @param {HTMLElement} overlayElement
    * @param {HTMLElement} presentationBarElement
+   * @param {HTMLElement} [audioButtonElement]
+   * @param {HTMLElement} [pauseButtonElement]
    * @param {Object} actionHandlers
    */
-  constructor(overlayElement, presentationBarElement, actionHandlers = {}) {
+  constructor(overlayElement, presentationBarElement, audioButtonElement, pauseButtonElement, actionHandlers = {}) {
     this.overlay = overlayElement;
     this.presentationBar = presentationBarElement;
+    this.audioButton = audioButtonElement;
+    this.pauseButton = pauseButtonElement;
     this.actions = actionHandlers;
 
     this._initOverlayEvents();
     this._initPresentationBar();
+    this._initStageButtons();
+  }
+
+  /**
+   * Initializes header stage control button listeners.
+   * @private
+   */
+  _initStageButtons() {
+    if (this.audioButton) {
+      this.audioButton.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (typeof this.actions.onToggleAudio === 'function') {
+          this.actions.onToggleAudio();
+        }
+      });
+    }
+
+    if (this.pauseButton) {
+      this.pauseButton.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (typeof this.actions.onTogglePause === 'function') {
+          this.actions.onTogglePause();
+        }
+      });
+    }
   }
 
   /**
@@ -56,6 +87,7 @@ class UIManager {
 
     buttonsHtml += '<button data-stage="next" aria-label="Next Stage">Next</button>';
     buttonsHtml += '<button data-stage="pause" aria-label="Pause for Deliberation">Pause (P)</button>';
+    buttonsHtml += '<button data-stage="audio" aria-label="Toggle Sound">Sound: on</button>';
     buttonsHtml += '<button data-stage="auto" aria-label="Toggle Auto Progress">Auto: on</button>';
 
     this.presentationBar.innerHTML = buttonsHtml;
@@ -73,6 +105,8 @@ class UIManager {
         if (typeof this.actions.onNextStage === 'function') this.actions.onNextStage();
       } else if (target === 'pause') {
         if (typeof this.actions.onTogglePause === 'function') this.actions.onTogglePause();
+      } else if (target === 'audio') {
+        if (typeof this.actions.onToggleAudio === 'function') this.actions.onToggleAudio();
       } else if (target === 'auto') {
         if (typeof this.actions.onToggleAuto === 'function') this.actions.onToggleAuto();
       } else {
@@ -144,12 +178,24 @@ class UIManager {
   }
 
   /**
-   * Synchronizes presentation toolbar button states with the current game progression.
+   * Synchronizes presentation toolbar and header button states with the current game progression.
    * @param {number} currentStage 1 to 6
    * @param {boolean} isAuto
    * @param {boolean} isPaused
+   * @param {boolean} isMuted
    */
-  syncPresentationBar(currentStage, isAuto, isPaused = false) {
+  syncPresentationBar(currentStage, isAuto, isPaused = false, isMuted = false) {
+    if (this.audioButton) {
+      this.audioButton.textContent = isMuted ? 'Sound: off' : 'Sound: on';
+      this.audioButton.classList.toggle('muted', isMuted);
+    }
+
+    if (this.pauseButton) {
+      this.pauseButton.textContent = isPaused ? 'Resume (P)' : 'Pause (P)';
+      this.pauseButton.classList.toggle('active', isPaused);
+      this.pauseButton.classList.toggle('on', isPaused);
+    }
+
     if (!this.presentationBar) return;
 
     const buttons = this.presentationBar.querySelectorAll('button[data-stage]');
@@ -162,6 +208,9 @@ class UIManager {
       } else if (stageKey === 'pause') {
         btn.textContent = isPaused ? 'Resume (P)' : 'Pause (P)';
         btn.classList.toggle('on', isPaused);
+      } else if (stageKey === 'audio') {
+        btn.textContent = isMuted ? 'Sound: off' : 'Sound: on';
+        btn.classList.toggle('on', !isMuted);
       } else {
         const isCurrent = stageKey === String(currentStage);
         btn.classList.toggle('on', isCurrent);
@@ -218,21 +267,44 @@ class UIManager {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
 
-      // Badge Card
-      ctx.fillStyle = 'rgba(248, 243, 229, 0.96)';
+      const titleText = 'PAUSED FOR DELIBERATION';
+      const subText = 'Click anywhere or press P to resume with co-shepherds';
+
+      ctx.font = '700 15px Mukta, sans-serif';
+      const w1 = ctx.measureText(titleText).width;
+
+      ctx.font = '500 13px Mukta, sans-serif';
+      const w2 = ctx.measureText(subText).width;
+
+      // Automatically size card with generous padding
+      const cardWidth = Math.max(380, Math.max(w1, w2) + 50);
+      const cardHeight = 54;
+      const cardX = W / 2 - cardWidth / 2;
+      const cardY = 12;
+
+      // Soft drop shadow
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.18)';
+      MathUtils.drawRoundedRect(ctx, cardX + 2, cardY + 3, cardWidth, cardHeight, 8);
+      ctx.fill();
+
+      // Card Face
+      ctx.fillStyle = 'rgba(248, 243, 229, 0.97)';
       ctx.strokeStyle = '#c8651b';
-      ctx.lineWidth = 2.5;
-      MathUtils.drawRoundedRect(ctx, W / 2 - 210, 14, 420, 48, 8);
+      ctx.lineWidth = 2;
+      MathUtils.drawRoundedRect(ctx, cardX, cardY, cardWidth, cardHeight, 8);
       ctx.fill();
       ctx.stroke();
 
+      // Title
       ctx.fillStyle = '#2d2a22';
-      ctx.font = '700 16px Mukta, sans-serif';
-      ctx.fillText('PAUSED FOR DELIBERATION (Press P to Resume)', W / 2, 28);
+      ctx.font = '700 15px Mukta, sans-serif';
+      ctx.fillText(titleText, W / 2, cardY + 19);
 
+      // Subtitle
       ctx.fillStyle = '#7a4214';
       ctx.font = '500 13px Mukta, sans-serif';
-      ctx.fillText('Discuss with co-shepherds: Assess traffic, flock spread, and timing', W / 2, 47);
+      ctx.fillText(subText, W / 2, cardY + 38);
+
       ctx.restore();
     }
 

@@ -12,6 +12,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const overlay = document.getElementById('overlay');
   const callButton = document.getElementById('call-button');
   const presentationBar = document.getElementById('presentation-bar');
+  const audioButton = document.getElementById('audio-toggle-button');
+  const pauseButton = document.getElementById('pause-toggle-button');
 
   if (!canvas || !overlay) {
     console.error('Critical initialization error: Canvas or overlay element missing.');
@@ -27,7 +29,7 @@ document.addEventListener('DOMContentLoaded', () => {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
   // Instantiate the game
-  const game = new Game(canvas, overlay, callButton, presentationBar);
+  const game = new Game(canvas, overlay, callButton, presentationBar, audioButton, pauseButton);
 
   // Game Loop
   let lastTimestamp = performance.now();
