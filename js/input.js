@@ -48,6 +48,13 @@ class InputManager {
         }
       }
 
+      // Deliberation Pause / Freeze toggle (P key)
+      if (key === 'p') {
+        if (typeof this.callbacks.onTogglePause === 'function') {
+          this.callbacks.onTogglePause();
+        }
+      }
+
       // Flock calling
       if (key === ' ') {
         this.calling = true;

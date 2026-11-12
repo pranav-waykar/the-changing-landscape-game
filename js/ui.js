@@ -55,6 +55,7 @@ class UIManager {
     });
 
     buttonsHtml += '<button data-stage="next" aria-label="Next Stage">Next</button>';
+    buttonsHtml += '<button data-stage="pause" aria-label="Pause for Deliberation">Pause (P)</button>';
     buttonsHtml += '<button data-stage="auto" aria-label="Toggle Auto Progress">Auto: on</button>';
 
     this.presentationBar.innerHTML = buttonsHtml;
@@ -70,6 +71,8 @@ class UIManager {
         if (typeof this.actions.onPrevStage === 'function') this.actions.onPrevStage();
       } else if (target === 'next') {
         if (typeof this.actions.onNextStage === 'function') this.actions.onNextStage();
+      } else if (target === 'pause') {
+        if (typeof this.actions.onTogglePause === 'function') this.actions.onTogglePause();
       } else if (target === 'auto') {
         if (typeof this.actions.onToggleAuto === 'function') this.actions.onToggleAuto();
       } else {
@@ -144,8 +147,9 @@ class UIManager {
    * Synchronizes presentation toolbar button states with the current game progression.
    * @param {number} currentStage 1 to 6
    * @param {boolean} isAuto
+   * @param {boolean} isPaused
    */
-  syncPresentationBar(currentStage, isAuto) {
+  syncPresentationBar(currentStage, isAuto, isPaused = false) {
     if (!this.presentationBar) return;
 
     const buttons = this.presentationBar.querySelectorAll('button[data-stage]');
@@ -155,6 +159,9 @@ class UIManager {
       if (stageKey === 'auto') {
         btn.textContent = `Auto: ${isAuto ? 'on' : 'off'}`;
         btn.classList.toggle('on', isAuto);
+      } else if (stageKey === 'pause') {
+        btn.textContent = isPaused ? 'Resume (P)' : 'Pause (P)';
+        btn.classList.toggle('on', isPaused);
       } else {
         const isCurrent = stageKey === String(currentStage);
         btn.classList.toggle('on', isCurrent);
@@ -204,6 +211,30 @@ class UIManager {
 
     // Do not draw stage/crossing badges during initial intro screen
     if (state.gameState === 'intro') return;
+
+    // Deliberation Pause Badge
+    if (state.isPaused) {
+      ctx.save();
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      // Badge Card
+      ctx.fillStyle = 'rgba(248, 243, 229, 0.96)';
+      ctx.strokeStyle = '#c8651b';
+      ctx.lineWidth = 2.5;
+      MathUtils.drawRoundedRect(ctx, W / 2 - 210, 14, 420, 48, 8);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = '#2d2a22';
+      ctx.font = '700 16px Mukta, sans-serif';
+      ctx.fillText('PAUSED FOR DELIBERATION (Press P to Resume)', W / 2, 28);
+
+      ctx.fillStyle = '#7a4214';
+      ctx.font = '500 13px Mukta, sans-serif';
+      ctx.fillText('Discuss with co-shepherds: Assess traffic, flock spread, and timing', W / 2, 47);
+      ctx.restore();
+    }
 
     ctx.save();
     ctx.font = '500 14px Mukta, sans-serif';

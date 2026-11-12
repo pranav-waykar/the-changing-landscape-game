@@ -76,12 +76,17 @@ class Sheep {
     let steerX = 0;
     let steerY = 0;
 
-    // 2. Shepherd Call vs Autonomous Wandering
-    if (isCalling && distToLeader > CONFIG.FLOCK.CALL_MIN_DISTANCE) {
+    // 2. Shepherd Call or Active Leader Movement vs. Static Grazing
+    // When the leader moves, follower sheep naturally gather and follow.
+    // When the leader stops (static state), follower sheep wander and graze.
+    const isLeaderMoving = Math.hypot(leader.vx, leader.vy) > 12;
+    const shouldGatherAndFollow = isCalling || isLeaderMoving;
+
+    if (shouldGatherAndFollow && distToLeader > CONFIG.FLOCK.CALL_MIN_DISTANCE) {
       steerX = (dx / distToLeader) * CONFIG.FLOCK.CALL_PULL_SPEED;
       steerY = (dy / distToLeader) * CONFIG.FLOCK.CALL_PULL_SPEED;
     } else {
-      // Natural wandering
+      // Natural grazing and wandering when leader is stationary
       const wanderSpeed = CONFIG.FLOCK.BASE_WANDER_SPEED * (1 + trafficSkittishness * 0.5);
       steerX = Math.cos(this.wanderAngle) * wanderSpeed;
       steerY = Math.sin(this.wanderAngle) * wanderSpeed;
