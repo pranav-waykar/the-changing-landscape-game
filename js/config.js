@@ -77,10 +77,10 @@ const CONFIG = Object.freeze({
     SPAWN_INTERVAL_MAX: 4.5,
 
     VEHICLE_TYPES: Object.freeze({
-      bike:  Object.freeze({ length: 22, width: 10, speedFactor: 1.15 }),
-      car:   Object.freeze({ length: 46, width: 24, speedFactor: 1.00 }),
-      truck: Object.freeze({ length: 84, width: 30, speedFactor: 0.78 }),
-      bus:   Object.freeze({ length: 96, width: 30, speedFactor: 0.85 })
+      bike:  Object.freeze({ length: 22, width: 10, speedFactor: 1.15, wakeFactor: 0.00, shadowDepth: 0.16 }),
+      car:   Object.freeze({ length: 46, width: 24, speedFactor: 1.00, wakeFactor: 0.35, shadowDepth: 0.25 }),
+      truck: Object.freeze({ length: 84, width: 30, speedFactor: 0.78, wakeFactor: 1.00, shadowDepth: 0.38 }),
+      bus:   Object.freeze({ length: 96, width: 30, speedFactor: 0.85, wakeFactor: 1.15, shadowDepth: 0.38 })
     }),
 
     PALETTE: Object.freeze([

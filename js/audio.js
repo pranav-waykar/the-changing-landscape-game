@@ -21,6 +21,9 @@ class SoundManager {
     this.pauseFilter = null;
     this.windGain = null;
     this.windFilter = null;
+    this.highwayDroneGain = null;
+    this.highwayDroneFilter = null;
+    this.trafficIntensity = 0.0;
 
     // Rate-limiting timers
     this.lastWhistleTime = 0;
@@ -41,6 +44,7 @@ class SoundManager {
       this.ctx = new AudioCtx();
       this._buildMasterBus();
       this._buildWindSynthesizer();
+      this._buildHighwayDrone();
       this.isInitialized = true;
     } catch (err) {
       console.warn('Web Audio API not supported or blocked:', err);
@@ -126,7 +130,53 @@ class SoundManager {
   }
 
   /**
-   * Updates wind dynamics based on development level and pause state.
+   * Builds an ambient low-frequency highway drone for stages with active vehicle traffic.
+   * Produces a warm, non-intrusive bed that conveys distant asphalt friction and engine rumble.
+   * @private
+   */
+  _buildHighwayDrone() {
+    // 1. Warm sub-bass rumble oscillators
+    const osc1 = this.ctx.createOscillator();
+    const osc2 = this.ctx.createOscillator();
+    osc1.type = 'sine';
+    osc2.type = 'triangle';
+    osc1.frequency.setValueAtTime(64, this.ctx.currentTime);
+    osc2.frequency.setValueAtTime(108, this.ctx.currentTime);
+
+    // 2. Continuous asphalt road texture noise
+    const bufferSize = this.ctx.sampleRate * 2;
+    const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    const output = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      output[i] = (Math.random() * 2 - 1) * 0.15;
+    }
+    const noiseSource = this.ctx.createBufferSource();
+    noiseSource.buffer = noiseBuffer;
+    noiseSource.loop = true;
+
+    // Filter to suppress harshness and isolate warm tire/road hum
+    this.highwayDroneFilter = this.ctx.createBiquadFilter();
+    this.highwayDroneFilter.type = 'lowpass';
+    this.highwayDroneFilter.frequency.setValueAtTime(140, this.ctx.currentTime);
+    this.highwayDroneFilter.Q.setValueAtTime(1.5, this.ctx.currentTime);
+
+    this.highwayDroneGain = this.ctx.createGain();
+    this.highwayDroneGain.gain.setValueAtTime(0.0, this.ctx.currentTime);
+
+    osc1.connect(this.highwayDroneFilter);
+    osc2.connect(this.highwayDroneFilter);
+    noiseSource.connect(this.highwayDroneFilter);
+
+    this.highwayDroneFilter.connect(this.highwayDroneGain);
+    this.highwayDroneGain.connect(this.masterGain);
+
+    osc1.start();
+    osc2.start();
+    noiseSource.start();
+  }
+
+  /**
+   * Updates wind dynamics and highway drone based on development level and pause state.
    * @param {number} developmentLevel
    * @param {boolean} isPaused
    */
@@ -144,6 +194,9 @@ class SoundManager {
     if (isPaused) {
       this.pauseFilter.frequency.setTargetAtTime(700, now, 0.1);
       this.masterGain.gain.setTargetAtTime(0.2, now, 0.1);
+      if (this.highwayDroneGain) {
+        this.highwayDroneGain.gain.setTargetAtTime(0.015, now, 0.15);
+      }
       return;
     } else {
       this.pauseFilter.frequency.setTargetAtTime(20000, now, 0.1);
@@ -154,10 +207,30 @@ class SoundManager {
     const devRatio = MathUtils.clamp(developmentLevel / 6.0, 0, 1);
     const windTargetVolume = Math.max(0.08, 0.28 * (1 - devRatio * 0.5));
     this.windGain.gain.setTargetAtTime(windTargetVolume, now, 0.3);
+
+    // Compute traffic intensity [0, 1] for stages >= 2.0
+    this.trafficIntensity = MathUtils.clamp(
+      (developmentLevel - CONFIG.TRAFFIC.MIN_DEVELOPMENT_LEVEL) / 4.0,
+      0,
+      1
+    );
+
+    // Dynamic Highway Drone: emerges in Stage 3 and grows with traffic intensity
+    if (this.highwayDroneGain) {
+      if (developmentLevel < CONFIG.TRAFFIC.MIN_DEVELOPMENT_LEVEL) {
+        this.highwayDroneGain.gain.setTargetAtTime(0.0, now, 0.2);
+      } else {
+        const droneTargetVol = 0.02 + this.trafficIntensity * 0.10;
+        this.highwayDroneGain.gain.setTargetAtTime(droneTargetVol, now, 0.3);
+        const droneCutoff = MathUtils.lerp(120, 260, this.trafficIntensity);
+        this.highwayDroneFilter.frequency.setTargetAtTime(droneCutoff, now, 0.4);
+      }
+    }
   }
 
   /**
    * Plays a delicate, soft brass bell chime providing organic auditory feedback when sheep walk.
+   * In later highway stages, ambient traffic noise subtly masks and softens the bell sound.
    */
   playSoftSheepBell() {
     if (!this.ctx || !this.isInitialized || this.isMuted) return;
@@ -171,17 +244,19 @@ class SoundManager {
     const gain = this.ctx.createGain();
 
     // Natural brass bell harmonic pair with subtle pitch variation
-    const baseFreq = 1480 + (Math.random() - 0.5) * 160;
+    // Acoustic masking: as highway traffic builds, delicate highs are subtly absorbed
+    const maskRatio = 1 - this.trafficIntensity * 0.42;
+    const baseFreq = (1480 + (Math.random() - 0.5) * 160) * MathUtils.lerp(1.0, 0.90, this.trafficIntensity * 0.25);
     osc1.type = 'sine';
     osc2.type = 'sine';
     osc1.frequency.setValueAtTime(baseFreq, now);
-    osc2.frequency.setValueAtTime(baseFreq * 1.48, now);
+    osc2.frequency.setValueAtTime(baseFreq * (1.48 - this.trafficIntensity * 0.12), now);
 
-    // Very gentle volume: soft clink of small neck bells against wool
-    const vol = 0.038 + Math.random() * 0.015;
+    // Gentle volume attenuated by ambient traffic masking
+    const vol = (0.038 + Math.random() * 0.015) * maskRatio;
     gain.gain.setValueAtTime(0.001, now);
     gain.gain.linearRampToValueAtTime(vol, now + 0.015);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + (0.22 * maskRatio));
 
     osc1.connect(gain);
     osc2.connect(gain);

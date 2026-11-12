@@ -125,6 +125,27 @@ class TrafficManager {
   }
 
   /**
+   * Applies aerodynamic displacement from passing heavy vehicles to nearby flock members.
+   * @param {Sheep[]} flockMembers
+   * @param {number} dt Delta time in seconds
+   */
+  applyWakeToFlock(flockMembers, dt) {
+    if (!this.vehicles.length || !flockMembers.length) return;
+
+    for (const vehicle of this.vehicles) {
+      if (vehicle.wakeFactor <= 0) continue;
+
+      for (const sheep of flockMembers) {
+        const wake = vehicle.getWakeForce(sheep.x, sheep.y);
+        if (wake) {
+          sheep.x += wake.pushX * dt;
+          sheep.y += wake.pushY * dt;
+        }
+      }
+    }
+  }
+
+  /**
    * Renders all active vehicles.
    * @param {CanvasRenderingContext2D} ctx
    */

@@ -333,6 +333,11 @@ class Game {
     // Update Traffic
     this.traffic.update(dt, this.developmentLevel);
 
+    // Apply aerodynamic wake from fast/heavy vehicles passing close to sheep
+    if (this.state === GameState.PLAYING) {
+      this.traffic.applyWakeToFlock(this.flock.members, dt);
+    }
+
     // Audio: Dynamic vehicle honking when approaching sheep near or on the highway
     if (this.traffic.vehicles.length > 0) {
       for (const vehicle of this.traffic.vehicles) {
@@ -399,7 +404,7 @@ class Game {
 
     // 1. Pastoral ground & ancient trodden path
     this.landscape.renderGround(ctx, this.developmentLevel, roadProgress, this.elapsedTime);
-    this.landscape.renderTroddenPath(ctx);
+    this.landscape.renderTroddenPath(ctx, roadProgress);
 
     // 2. Water trough destination
     this.landscape.renderWaterTrough(ctx, this.elapsedTime);
@@ -425,6 +430,9 @@ class Game {
       isPaused: this.isPaused,
       developmentLevel: this.developmentLevel,
       tripCount: this.tripTimes.length,
+      currentTripTime: this.currentTripTime,
+      lastTripDuration: this.tripTimes.length > 0 ? this.tripTimes[this.tripTimes.length - 1] : null,
+      firstTripDuration: this.tripTimes.length > 0 ? this.tripTimes[0] : null,
       stageFlashTimer: this.stageFlashTimer,
       hasUsedCall: this.input.hasUsedCall,
       playTime: this.playTime,

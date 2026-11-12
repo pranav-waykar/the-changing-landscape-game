@@ -104,9 +104,11 @@ class Landscape {
 
   /**
    * Renders the ancient shepherd trail worn into the prairie.
+   * Visually displays the bisecting and severing of the trail when the highway emerges.
    * @param {CanvasRenderingContext2D} ctx
+   * @param {number} [roadProgress=0]
    */
-  renderTroddenPath(ctx) {
+  renderTroddenPath(ctx, roadProgress = 0) {
     const start = CONFIG.WORLD.START_POSITION;
     const trough = CONFIG.WORLD.TROUGH;
     const H = CONFIG.CANVAS.HEIGHT;
@@ -125,6 +127,25 @@ class Landscape {
     ctx.strokeStyle = 'rgba(120, 100, 60, 0.12)';
     ctx.lineWidth = 8;
     ctx.stroke();
+
+    // Severed trail edges when highway emerges
+    if (roadProgress > 0.1) {
+      const roadTop = CONFIG.WORLD.ROAD_Y;
+      const roadBottom = CONFIG.WORLD.ROAD_Y + CONFIG.WORLD.ROAD_HEIGHT;
+
+      // Subtle severed trail dust mounds at the road shoulders
+      ctx.fillStyle = `rgba(168, 140, 95, ${0.4 * roadProgress})`;
+
+      // Southern severance (where path hits southern shoulder)
+      ctx.beginPath();
+      ctx.ellipse(395, roadBottom + 3, 16, 5, -0.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Northern severance (where path resumes on northern shoulder)
+      ctx.beginPath();
+      ctx.ellipse(565, roadTop - 3, 16, 5, -0.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
 
     ctx.restore();
   }

@@ -276,34 +276,34 @@ class UIManager {
       ctx.font = '500 13px Mukta, sans-serif';
       const w2 = ctx.measureText(subText).width;
 
-      // Automatically size card with generous padding
-      const cardWidth = Math.max(380, Math.max(w1, w2) + 50);
-      const cardHeight = 54;
+      // Generously sized card with comfortable padding so text never touches border
+      const cardWidth = Math.max(420, Math.max(w1, w2) + 64);
+      const cardHeight = 56;
       const cardX = W / 2 - cardWidth / 2;
-      const cardY = 12;
+      const cardY = 14;
 
       // Soft drop shadow
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.18)';
-      MathUtils.drawRoundedRect(ctx, cardX + 2, cardY + 3, cardWidth, cardHeight, 8);
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.20)';
+      MathUtils.drawRoundedRect(ctx, cardX + 2, cardY + 3, cardWidth, cardHeight, 10);
       ctx.fill();
 
       // Card Face
-      ctx.fillStyle = 'rgba(248, 243, 229, 0.97)';
+      ctx.fillStyle = 'rgba(252, 248, 238, 0.98)';
       ctx.strokeStyle = '#c8651b';
-      ctx.lineWidth = 2;
-      MathUtils.drawRoundedRect(ctx, cardX, cardY, cardWidth, cardHeight, 8);
+      ctx.lineWidth = 2.5;
+      MathUtils.drawRoundedRect(ctx, cardX, cardY, cardWidth, cardHeight, 10);
       ctx.fill();
       ctx.stroke();
 
       // Title
       ctx.fillStyle = '#2d2a22';
       ctx.font = '700 15px Mukta, sans-serif';
-      ctx.fillText(titleText, W / 2, cardY + 19);
+      ctx.fillText(titleText, W / 2, cardY + 20);
 
       // Subtitle
       ctx.fillStyle = '#7a4214';
       ctx.font = '500 13px Mukta, sans-serif';
-      ctx.fillText(subText, W / 2, cardY + 38);
+      ctx.fillText(subText, W / 2, cardY + 39);
 
       ctx.restore();
     }
@@ -326,8 +326,13 @@ class UIManager {
     ctx.fillStyle = '#2d2a22';
     ctx.fillText(stageTitle, 25, 28);
 
-    // 3. Crossing Counter Pill
-    const crossingText = `Crossing ${state.tripCount + 1}`;
+    // 3. Crossing Counter & Live Stopwatch Pill
+    const currentSeconds = (state.currentTripTime || 0).toFixed(1);
+    let crossingText = `Crossing ${state.tripCount + 1}  •  ${currentSeconds}s`;
+    if (state.lastTripDuration !== null && state.lastTripDuration !== undefined) {
+      crossingText += `  (Prev: ${state.lastTripDuration.toFixed(1)}s)`;
+    }
+
     const crossingWidth = ctx.measureText(crossingText).width + 22;
     ctx.fillStyle = 'rgba(248, 243, 229, 0.62)';
     MathUtils.drawRoundedRect(ctx, 14, 48, crossingWidth, 26, 6);
@@ -350,13 +355,18 @@ class UIManager {
     // 5. Water Arrival Banner
     if (state.gameState === 'arrive') {
       ctx.textAlign = 'center';
-      ctx.font = '700 22px Mukta, sans-serif';
-      ctx.fillStyle = 'rgba(248, 243, 229, 0.92)';
-      MathUtils.drawRoundedRect(ctx, W / 2 - 170, H / 2 - 24, 340, 48, 8);
+      const lastDurationText = state.lastTripDuration ? ` (${state.lastTripDuration.toFixed(1)}s)` : '';
+      const arrivalTitle = `Water. The flock is together.${lastDurationText}`;
+
+      ctx.font = '700 20px Mukta, sans-serif';
+      const bannerWidth = Math.max(340, ctx.measureText(arrivalTitle).width + 48);
+
+      ctx.fillStyle = 'rgba(248, 243, 229, 0.94)';
+      MathUtils.drawRoundedRect(ctx, W / 2 - bannerWidth / 2, H / 2 - 24, bannerWidth, 48, 8);
       ctx.fill();
 
       ctx.fillStyle = '#2d2a22';
-      ctx.fillText('Water. The flock is together.', W / 2, H / 2);
+      ctx.fillText(arrivalTitle, W / 2, H / 2);
     }
 
     ctx.restore();

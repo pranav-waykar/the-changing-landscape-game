@@ -31,6 +31,10 @@ class Vehicle {
     this.color = color;
     this.baseSpeed = speed;
     this.currentSpeed = speed;
+
+    const typeConfig = (CONFIG.TRAFFIC && CONFIG.TRAFFIC.VEHICLE_TYPES && CONFIG.TRAFFIC.VEHICLE_TYPES[type]) || {};
+    this.wakeFactor = typeConfig.wakeFactor || 0.0;
+    this.shadowDepth = typeConfig.shadowDepth || 0.25;
   }
 
   /**
@@ -58,6 +62,38 @@ class Vehicle {
   }
 
   /**
+   * Computes aerodynamic wake gust on nearby entities (e.g. sheep at road edge).
+   * Heavy trucks and buses moving at high velocity push sheep slightly away from the lane.
+   * @param {number} targetX
+   * @param {number} targetY
+   * @returns {{pushX: number, pushY: number, intensity: number}|null}
+   */
+  getWakeForce(targetX, targetY) {
+    if (this.wakeFactor <= 0) return null;
+
+    const dy = targetY - this.y;
+    const absDy = Math.abs(dy);
+    // Vertical corridor: vehicle width/2 up to ~42px from lane center
+    if (absDy > 42) return null;
+
+    // Horizontal wake zone: spans the vehicle body plus slipstream behind it
+    const relX = (targetX - this.x) * this.direction;
+    const halfLen = this.length / 2;
+    if (relX < -halfLen - 25 || relX > halfLen + 15) return null;
+
+    // Proximity factor [0, 1]
+    const proxY = 1 - (absDy / 42);
+    const speedRatio = Math.min(1.5, this.currentSpeed / 130);
+    const intensity = proxY * speedRatio * this.wakeFactor;
+
+    // Displace outward away from vehicle center + slight draft in travel direction
+    const pushY = (dy >= 0 ? 1 : -1) * (36 * intensity);
+    const pushX = this.direction * (18 * intensity);
+
+    return { pushX, pushY, intensity };
+  }
+
+  /**
    * Tests whether the vehicle has traveled beyond the visible boundaries plus despawn margins.
    * @param {number} canvasWidth
    * @returns {boolean}
@@ -79,9 +115,14 @@ class Vehicle {
     const length = this.length;
     const width = this.width;
 
-    // Contact drop shadow
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
-    MathUtils.drawRoundedRect(ctx, -length / 2 + 2, -width / 2 + 4, length, width, 5);
+    // Contact drop shadow scaled to vehicle mass
+    const shadowAlpha = this.shadowDepth;
+    const isHeavy = this.type === 'truck' || this.type === 'bus';
+    const shadowOffset = isHeavy ? 5 : 4;
+    const shadowExtra = isHeavy ? 2 : 0;
+
+    ctx.fillStyle = `rgba(0, 0, 0, ${shadowAlpha})`;
+    MathUtils.drawRoundedRect(ctx, -length / 2 + 2, -width / 2 + shadowOffset, length + shadowExtra, width + shadowExtra, 5);
     ctx.fill();
 
     // Body rendering by vehicle type

@@ -56,7 +56,27 @@ class Road {
       ctx.fillRect(speckX, speckY, 40, 2);
     }
 
-    // 4. Highway lane striping & edge lines (fade in once paving exceeds 60%)
+    // 4. Heavy vehicular tire wear ruts and brake scrub marks (fade in as traffic runs)
+    if (progress > 0.6) {
+      const trafficAlpha = (progress - 0.6) / 0.4;
+
+      // Darker wheel rut tracks in westbound and eastbound lanes
+      ctx.fillStyle = `rgba(18, 17, 16, ${0.14 * trafficAlpha})`;
+      // Lane 0 wheel paths (Y = 268)
+      ctx.fillRect(0, centerY - 38, W, 7);
+      ctx.fillRect(0, centerY - 18, W, 7);
+      // Lane 1 wheel paths (Y = 324)
+      ctx.fillRect(0, centerY + 18, W, 7);
+      ctx.fillRect(0, centerY + 38, W, 7);
+
+      // Faint tire scrub/skid marks near the shepherd crossing corridor
+      ctx.fillStyle = `rgba(12, 12, 12, ${0.22 * trafficAlpha})`;
+      ctx.fillRect(430, centerY - 37, 52, 4);
+      ctx.fillRect(495, centerY + 20, 68, 5);
+      ctx.fillRect(520, centerY + 37, 44, 4);
+    }
+
+    // 5. Highway lane striping & edge lines (fade in once paving exceeds 60%)
     if (progress > 0.6) {
       const lineAlpha = (progress - 0.6) / 0.4;
       ctx.globalAlpha = lineAlpha;
